@@ -1,4 +1,4 @@
-package avro.repo;
+package org.schemarepo.jdbc;
 
 import org.schemarepo.InMemorySchemaEntryCache;
 import org.schemarepo.InMemorySubjectCache;
@@ -27,13 +27,13 @@ import java.util.UUID;
 /**
  * Created by vchekan on 7/10/2014.
  */
-public class DbRepository implements Repository {
+public class JdbcRepository implements Repository {
     String jdbc;
     private ValidatorFactory validators;
     private final InMemorySubjectCache subjects = new InMemorySubjectCache();
 
     @Inject
-    public DbRepository(@Named("avro.repo.jdbc") String jdbc, ValidatorFactory validators) {
+    public JdbcRepository(@Named("schema-repo.jdbc.jdbc") String jdbc, ValidatorFactory validators) {
         this.jdbc = jdbc;
         this.validators = validators;
 
