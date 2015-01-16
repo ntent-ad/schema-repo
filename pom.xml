@@ -74,11 +74,13 @@
 
   <modules>
     <module>common</module>
+	<module>jdbc</module>
     <module>server</module>
     <module>client</module>
     <module>bundle</module>
     <module>zookeeper</module>
     <module>zk-bundle</module>
+    <module>jdbc-bundle</module>
   </modules>
 
   <properties>
