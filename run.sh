@@ -20,6 +20,9 @@ elif [[ $1 == 'file-system' ]]; then
 elif [[ $1 == 'zookeeper' ]]; then
 	echo "Starting Schema Repo Server with ZooKeeper backend"
 	java -cp zk-bundle/target/schema-repo-zk-bundle-*-withdeps.jar org.schemarepo.server.RepositoryServer zk-bundle/config/config.properties
+elif [[ $1 == 'jdbc' ]]; then
+	echo "Starting Schema Repo Server with JDBC backend"
+	java -cp jdbc-bundle/target/schema-repo-jdbc-bundle-*-withdeps.jar org.schemarepo.server.RepositoryServer jdbc-bundle/config/jdbc-config.properties
 else
 	usage
 fi
