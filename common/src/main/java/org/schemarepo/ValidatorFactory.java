@@ -18,6 +18,8 @@
 
 package org.schemarepo;
 
+import org.schemarepo.config.Config;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -29,7 +31,6 @@ import java.util.Set;
  */
 public class ValidatorFactory {
 
-  public static final String REJECT_VALIDATOR = "repo.reject";
   public static final ValidatorFactory EMPTY = new Builder().build();
 
   private final HashMap<String, Validator> validators;
@@ -58,7 +59,7 @@ public class ValidatorFactory {
     private final HashMap<String, Validator> validators;
     {
       validators = new HashMap<String, Validator>();
-      validators.put(REJECT_VALIDATOR, new Reject());
+      validators.put(Config.REJECT_VALIDATOR, new Reject());
     }
 
     /**
@@ -67,7 +68,7 @@ public class ValidatorFactory {
      * The name must not be null and must not start with "repo.".
      */
     public Builder setValidator(String name, Validator validator) {
-      if (name.startsWith("repo.")) {
+      if (name.startsWith(Config.GLOBAL_PREFIX)) {
         throw new RuntimeException("Validator names starting with 'repo.'"
             + " are reserved.  Attempted to set validator with name: " + name);
       }
