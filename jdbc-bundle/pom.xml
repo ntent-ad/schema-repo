@@ -91,6 +91,11 @@
       <artifactId>schema-repo-jdbc</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>org.schemarepo</groupId>
+      <artifactId>schema-repo-avro</artifactId>
+      <version>${project.version}</version>
+    </dependency>
   </dependencies>
 
 </project>
