@@ -259,7 +259,7 @@ public class RESTRepository {
       subject = truncateSubject(subject);
       return Response.ok(getSubject(subject).register(schema).getId()).build();
     } catch (SchemaValidationException e) {
-      return Response.status(Status.FORBIDDEN).build();
+      return Response.status(Status.FORBIDDEN).entity(e.getMessage()).build();
     }
   }
 
