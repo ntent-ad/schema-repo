@@ -9,10 +9,14 @@ import org.schemarepo.SchemaValidationException;
 import org.schemarepo.Subject;
 import org.schemarepo.SubjectConfig;
 import org.schemarepo.ValidatorFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Named;
 import java.io.IOException;
+import java.io.StringReader;
+import java.io.StringWriter;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -22,6 +26,7 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.ResultSet;
 import java.util.ArrayList;
+import java.util.Properties;
 import java.util.UUID;
 
 /**
@@ -31,6 +36,7 @@ public class JdbcRepository implements Repository {
     String jdbc;
     private ValidatorFactory validators;
     private final InMemorySubjectCache subjects = new InMemorySubjectCache();
+    private final Logger logger = LoggerFactory.getLogger(getClass());
 
     @Inject
     public JdbcRepository(@Named("schema-repo.jdbc.jdbc") String jdbc, ValidatorFactory validators) {
@@ -45,9 +51,13 @@ public class JdbcRepository implements Repository {
     public Subject register(String subjectName, SubjectConfig config) {
         Subject subject = subjects.lookup(subjectName);
         if (null == subject) {
-            subject = subjects.add(Subject.validatingSubject(new DbSubject(subjectName, config), validators));
+            subject = addSubject(subjectName, config);
         }
         return subject;
+    }
+
+    private Subject addSubject(String subjectName, SubjectConfig config) {
+        return subjects.add(Subject.validatingSubject(new DbSubject(subjectName, config), validators));
     }
 
     @Override
@@ -69,31 +79,22 @@ public class JdbcRepository implements Repository {
         try {
             Connection conn = connect(jdbc);
             try {
-                // No tuples in java: use 2 lists to keep Subject and its Id
-                ArrayList<DbSubject> subjects = new ArrayList<DbSubject>();
-                ArrayList<Integer> subjId = new ArrayList<Integer>();
                 PreparedStatement ste = conn.prepareStatement(
-                        "select Topic, Id from dbo.Topic");
+                        "select Topic, Id, Configuration from dbo.Topic");
                 ResultSet res = ste.executeQuery();
                 while (res.next()) {
-                    String topic = res.getString(1);
+                    String subjectName = res.getString(1);
                     int id = res.getInt(2);
-                    DbSubject subj = new DbSubject(topic, null);
-                    subjects.add(subj);
-                    subjId.add(id);
-                }
-
-                for(int i=0; i<subjects.size(); i++) {
-                    DbSubject subj = subjects.get(i);
-                    Integer id = subjId.get(i);
-                    subj.loadSubjects(conn, id);
-                    this.subjects.add(subj);
+                    SubjectConfig subjectConfig = configFromString(res.getString(3));
+                    addSubject(subjectName,subjectConfig);
                 }
 
             } finally {
                 conn.close();
             }
         } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
             throw new RuntimeException(e);
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -105,6 +106,15 @@ public class JdbcRepository implements Repository {
         // nothing to close here. No resources held open.
     }
 
+    SubjectConfig configFromString(String configString) throws IOException {
+        Properties props = new Properties();
+        SubjectConfig subjectConfig = null;
+        if (configString != null) {
+            props.load(new StringReader(configString));
+            subjectConfig = RepositoryUtil.configFromProperties(props);
+        }
+        return subjectConfig;
+    }
     //
     // Inner classes
     //
@@ -133,7 +143,7 @@ public class JdbcRepository implements Repository {
         @Override
         public SchemaEntry register(String schema) throws SchemaValidationException {
             RepositoryUtil.validateSchemaOrSubject(schema);
-            SchemaEntry entry = loadOrCreate(schema);
+            SchemaEntry entry = loadOrCreateSchema(schema);
             schemas.add(entry);
             latest = entry;
             return entry;
@@ -187,19 +197,23 @@ public class JdbcRepository implements Repository {
                     // topic is already registered, just cache it
                     int id = res.getInt(1);
                     topicId = id;
+                    loadSchemas(conn,id);
                 } else {
                     // topic does not exist in db, create it
                     PreparedStatement ste2 = conn.prepareStatement(
-                            "insert into dbo.Topic(Topic) values(?);\n"+
+                            "insert into dbo.Topic(Topic,Configuration) values(?,?);\n"+
                                     "select Id from dbo.Topic where Topic=?");
                     ste2.setString(1, subjectName);
-                    ste2.setString(2, subjectName);
+                    ste2.setString(2, configAsString(config));
+                    ste2.setString(3, subjectName);
                     ResultSet res2 = ste2.executeQuery();
                     res2.next();
                     int id = res2.getInt(1);
                     topicId = id;
                 }
                 return topicId;
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             } catch (ClassNotFoundException e) {
                 throw new RuntimeException(e);
             } catch (SQLException e) {
@@ -207,7 +221,16 @@ public class JdbcRepository implements Repository {
             }
         }
 
-        SchemaEntry loadOrCreate(String schema) {
+        String configAsString(SubjectConfig subjectConfig) throws IOException {
+            Properties props = new Properties();
+            props.putAll(RepositoryUtil.safeConfig(subjectConfig).asMap());
+            StringWriter writer = new StringWriter();
+            props.store(writer,"SubjectConfig Properties");
+            return writer.toString();
+        }
+
+
+        SchemaEntry loadOrCreateSchema(String schema) {
             int topicId;
             int schemaId;
             String subjectName = this.getName();
@@ -298,7 +321,7 @@ public class JdbcRepository implements Repository {
             }
         }
 
-        void loadSubjects(Connection conn, Integer id) throws SQLException {
+        void loadSchemas(Connection conn, Integer id) throws SQLException {
             // load schemas into subjects
             PreparedStatement ste = conn.prepareStatement("select s.[Schema], s.Id\n" +
                     "from dbo.TopicSchemaMap m\n" +
