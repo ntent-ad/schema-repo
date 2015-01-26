@@ -1,8 +1,7 @@
 package org.schemarepo.jdbc;
 
+import org.schemarepo.AbstractBackendRepository;
 import org.schemarepo.InMemorySchemaEntryCache;
-import org.schemarepo.InMemorySubjectCache;
-import org.schemarepo.Repository;
 import org.schemarepo.RepositoryUtil;
 import org.schemarepo.SchemaEntry;
 import org.schemarepo.SchemaValidationException;
@@ -29,47 +28,84 @@ import java.util.Properties;
 import java.util.UUID;
 
 /**
- * Created by vchekan on 7/10/2014.
+ * JDBC based backend repository.
  */
-public class JdbcRepository implements Repository {
+public class JdbcRepository extends AbstractBackendRepository {
     String jdbc;
-    private ValidatorFactory validators;
-    private final InMemorySubjectCache subjects = new InMemorySubjectCache();
     private final Logger logger = LoggerFactory.getLogger(getClass());
 
     @Inject
     public JdbcRepository(@Named("schema-repo.jdbc.jdbc") String jdbc, ValidatorFactory validators) {
+        super(validators);
+
         this.jdbc = jdbc;
-        this.validators = validators;
 
         // eagerly load up subjects
         loadSubjects();
     }
 
     @Override
-    public Subject register(String subjectName, SubjectConfig config) {
-        Subject subject = subjects.lookup(subjectName);
-        if (null == subject) {
-            subject = addSubject(subjectName, config);
+    protected Subject getSubjectInstance(String subjectName) {
+        return new DbSubject(subjectName);
+    }
+
+    @Override
+    protected void registerSubjectInBackend(String subjectName, SubjectConfig config) {
+        Connection conn;
+        try {
+            int topicId;
+            conn = connect(jdbc);
+
+            try {
+                // check if subject exists
+                topicId = checkExists(subjectName, conn);
+
+                if (topicId >= 0)
+                    return;
+
+                // topic does not exist in db, create it
+                PreparedStatement ste = conn.prepareStatement(
+                        "insert into dbo.Topic(Topic,Configuration) values(?,?);");
+                ste.setString(1, subjectName);
+                ste.setString(2, configAsString(config));
+                ste.execute();
+
+            } finally {
+                conn.close();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
-        return subject;
-    }
 
-    private Subject addSubject(String subjectName, SubjectConfig config) {
-        return subjects.add(Subject.validatingSubject(new DbSubject(subjectName, config), validators));
     }
 
     @Override
-    public Subject lookup(String subjectName) {
-        return subjects.lookup(subjectName);
+    protected boolean checkSubjectExistsInBackend(final String subjectName) {
+        Connection conn;
+        try {
+            int topicId;
+            conn = connect(jdbc);
+
+            try {
+                // check if subject exists
+                topicId = checkExists(subjectName, conn);
+                return topicId >= 0;
+            } finally {
+                conn.close();
+            }
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException(e);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 
-    @Override
-    public Iterable<Subject> subjects() {
-        return subjects.values();
-    }
-
-    static Connection connect(String jdbc) throws ClassNotFoundException, SQLException {
+    private static Connection connect(String jdbc) throws ClassNotFoundException, SQLException {
         Class.forName("net.sourceforge.jtds.jdbc.Driver");
         return DriverManager.getConnection(jdbc);
     }
@@ -83,11 +119,11 @@ public class JdbcRepository implements Repository {
                 ResultSet res = ste.executeQuery();
                 while (res.next()) {
                     String subjectName = res.getString(1);
-                    int id = res.getInt(2);
+                    //int id = res.getInt(2);
                     SubjectConfig subjectConfig = configFromString(res.getString(3));
-                    addSubject(subjectName,subjectConfig);
+                    Subject subj = new DbSubject(subjectName, subjectConfig, conn);
+                    cacheSubject(subj);
                 }
-
             } finally {
                 conn.close();
             }
@@ -98,6 +134,21 @@ public class JdbcRepository implements Repository {
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private int checkExists(String subjectName, Connection conn) throws SQLException {
+        // topic is not cached
+        PreparedStatement ste = conn.prepareStatement(
+                "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n"+
+                        "select Id from dbo.Topic where Topic=?");
+        ste.setString(1, subjectName);
+        ResultSet res = ste.executeQuery();
+        if(res.next()) {
+            int id = res.getInt(1);
+            return id;
+        }
+
+        return -1;
     }
 
     @Override
@@ -114,6 +165,15 @@ public class JdbcRepository implements Repository {
         }
         return subjectConfig;
     }
+
+    String configAsString(SubjectConfig subjectConfig) throws IOException {
+        Properties props = new Properties();
+        props.putAll(RepositoryUtil.safeConfig(subjectConfig).asMap());
+        StringWriter writer = new StringWriter();
+        props.store(writer,"SubjectConfig Properties");
+        return writer.toString();
+    }
+
     //
     // Inner classes
     //
@@ -122,11 +182,60 @@ public class JdbcRepository implements Repository {
         private SubjectConfig config;
         private final InMemorySchemaEntryCache schemas = new InMemorySchemaEntryCache();
         private SchemaEntry latest = null;
+        private final int subjectId;
 
-        protected DbSubject(String name, SubjectConfig config) {
+        protected DbSubject(String name) {
             super(name);
+            Connection conn;
+            try {
+                conn = connect(jdbc);
+                try {
+                    subjectId = checkExists(name, conn);
+                    if (subjectId < 0) {
+                        throw new RuntimeException("Subject named " + name + " does not exist in the database!");
+                    }
+                    // topic is already registered, just load config and schemas
+                    loadConfig(conn);
+                    loadSchemas(conn);
+                } finally {
+                    conn.close();
+                }
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            } catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        /***
+         * Private constructor for eager loading of subjects during creation of JdbcRepository.
+         * @param name The Subject Name
+         * @param config The Subject Config
+         * @param conn The open Jdbc Connection to use for lookups and loading of schemas
+         * @throws SQLException
+         */
+        private DbSubject(String name, SubjectConfig config, Connection conn) throws SQLException {
+            super(name);
+            subjectId = checkExists(name, conn);
+            if (subjectId < 0) {
+                throw new RuntimeException("Subject named " + name + " does not exist in the database!");
+            }
             this.config = RepositoryUtil.safeConfig(config);
-            createSubject(this.getName());
+            loadSchemas(conn);
+        }
+
+        private void loadConfig(Connection conn) throws SQLException, IOException {
+            PreparedStatement ste = conn.prepareStatement(
+                    "select Configuration from dbo.Topic where Id=?");
+            ste.setInt(1, subjectId);
+            ResultSet res = ste.executeQuery();
+            if (!res.next()) {
+                throw new RuntimeException("Subject does not exist in database! " + this.getName() + "[" + subjectId + "]");
+            }
+            SubjectConfig subjectConfig = configFromString(res.getString(1));
+            config = RepositoryUtil.safeConfig(subjectConfig);
         }
 
         @Override
@@ -180,132 +289,54 @@ public class JdbcRepository implements Repository {
         // Helper functions
         //
 
-        int createSubject(String subjectName) {
-
-            Connection conn = null;
-            try {
-                int topicId;
-                conn = connect(jdbc);
-                // topic is not cached
-                PreparedStatement ste = conn.prepareStatement(
-                        "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n"+
-                                "select Id from dbo.Topic where Topic=?");
-                ste.setString(1, subjectName);
-                ResultSet res = ste.executeQuery();
-                if(res.next()) {
-                    // topic is already registered, just cache it
-                    int id = res.getInt(1);
-                    topicId = id;
-                    loadSchemas(conn,id);
-                } else {
-                    // topic does not exist in db, create it
-                    PreparedStatement ste2 = conn.prepareStatement(
-                            "insert into dbo.Topic(Topic,Configuration) values(?,?);\n"+
-                                    "select Id from dbo.Topic where Topic=?");
-                    ste2.setString(1, subjectName);
-                    ste2.setString(2, configAsString(config));
-                    ste2.setString(3, subjectName);
-                    ResultSet res2 = ste2.executeQuery();
-                    res2.next();
-                    int id = res2.getInt(1);
-                    topicId = id;
-                }
-                return topicId;
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            } catch (ClassNotFoundException e) {
-                throw new RuntimeException(e);
-            } catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-        String configAsString(SubjectConfig subjectConfig) throws IOException {
-            Properties props = new Properties();
-            props.putAll(RepositoryUtil.safeConfig(subjectConfig).asMap());
-            StringWriter writer = new StringWriter();
-            props.store(writer,"SubjectConfig Properties");
-            return writer.toString();
-        }
-
-
         SchemaEntry loadOrCreateSchema(String schema) {
-            int topicId;
             int schemaId;
-            String subjectName = this.getName();
             Connection conn;
-
-            //
-            // get topic
-            //
             try {
                 conn = connect(jdbc);
-                // topic is not cached
-                PreparedStatement ste = conn.prepareStatement(
-                        "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n"+
-                                "select Id from dbo.Topic where Topic=?");
-                ste.setString(1, subjectName);
-                ResultSet res = ste.executeQuery();
-                if(res.next()) {
-                    // topic is already registered, just cache it
-                    int id = res.getInt(1);
-                    topicId = id;
-                } else {
-                    // topic does not exist in db, create it
-                    PreparedStatement ste2 = conn.prepareStatement(
-                            "insert into dbo.Topic(Topic) values(?);\n"+
-                                    "select Id from dbo.Topic where Topic=?");
-                    ste2.setString(1, subjectName);
-                    ste2.setString(2, subjectName);
-                    ResultSet res2 = ste2.executeQuery();
-                    res2.next();
-                    int id = res2.getInt(1);
-                    topicId = id;
+
+                try {
+                    // check if schema exists
+                    String hash = makeHash(schema);
+                    PreparedStatement ste = conn.prepareStatement(
+                            "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n" +
+                                    "select Id, Hash from dbo.[Schema] where Hash=?");
+                    ste.setString(1, hash);
+                    ResultSet res = ste.executeQuery();
+                    if (res.next()) {
+                        // schema is already registered, just cache it
+                        schemaId = res.getInt(1);
+                        if (!hash.toLowerCase().equals(res.getString(2).toLowerCase()))
+                            throw new RuntimeException("Corrupt schema: hash does not match to the one already exists");
+                    } else {
+                        // schema does not exist in db, create it
+                        PreparedStatement ste2 = conn.prepareStatement(
+                                "insert into dbo.[Schema]([Schema], Hash) values(?,?);\n" +
+                                        "select Id from dbo.[Schema] where Hash=?");
+                        ste2.setString(1, schema);
+                        ste2.setString(2, hash);
+                        ste2.setString(3, hash);
+                        ResultSet res2 = ste2.executeQuery();
+                        res2.next();
+                        schemaId = res2.getInt(1);
+                    }
+
+                    //
+                    // Register this schema to this topic
+                    //
+                    ste = conn.prepareStatement(
+                            "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n" +
+                                    "if not exists(select * from dbo.TopicSchemaMap where TopicId=? and SchemaId=?)\n" +
+                                    "insert into dbo.TopicSchemaMap(TopicId, SchemaId) values(?, ?)");
+                    ste.setInt(1, subjectId);
+                    ste.setInt(2, schemaId);
+                    ste.setInt(3, subjectId);
+                    ste.setInt(4, schemaId);
+                    ste.execute();
+                } finally {
+                    if (conn != null)
+                        conn.close();
                 }
-
-                //
-                // get schema
-                //
-                String hash = makeHash(schema);
-                conn = connect(jdbc);
-                ste = conn.prepareStatement(
-                        "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n"+
-                                "select Id, Hash from dbo.[Schema] where Hash=?");
-                ste.setString(1, hash);
-                res = ste.executeQuery();
-                if(res.next()) {
-                    // schema is already registered, just cache it
-                    schemaId = res.getInt(1);
-                    if(!hash.toLowerCase().equals(res.getString(2).toLowerCase()))
-                        throw new RuntimeException("Corrupt schema: hash does not match to the one already exists");
-                } else {
-                    // schema does not exist in db, create it
-                    PreparedStatement ste2 = conn.prepareStatement(
-                            "insert into dbo.[Schema]([Schema], Hash) values(?,?);\n" +
-                                    "select Id from dbo.[Schema] where Hash=?");
-                    ste2.setString(1, schema.toString());
-                    ste2.setString(2, hash);
-                    ste2.setString(3, hash);
-                    ResultSet res2 = ste2.executeQuery();
-                    res2.next();
-                    schemaId = res2.getInt(1);
-                }
-
-                //
-                // Register this schema to this topic
-                //
-                ste = conn.prepareStatement(
-                        "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n"+
-                                "if not exists(select * from dbo.TopicSchemaMap where TopicId=? and SchemaId=?)\n"+
-                                "insert into dbo.TopicSchemaMap(TopicId, SchemaId) values(?, ?)");
-                ste.setInt(1, topicId);
-                ste.setInt(2, schemaId);
-                ste.setInt(3, topicId);
-                ste.setInt(4, schemaId);
-                ste.execute();
-
-                if(conn != null)
-                    conn.close();
 
                 if(schemaId != -1)
                     return new SchemaEntry(String.valueOf(schemaId), schema);
@@ -320,14 +351,15 @@ public class JdbcRepository implements Repository {
             }
         }
 
-        void loadSchemas(Connection conn, Integer id) throws SQLException {
+        private void loadSchemas(Connection conn) throws SQLException {
+
             // load schemas into subjects
             PreparedStatement ste = conn.prepareStatement("select s.[Schema], s.Id\n" +
                     "from dbo.TopicSchemaMap m\n" +
                     "join dbo.[Schema] s on s.Id=m.SchemaId\n" +
                     "where m.TopicId=?\n" +
                     "order by s.Id");
-            ste.setInt(1, id);
+            ste.setInt(1, subjectId);
             ResultSet res = ste.executeQuery();
             while(res.next()) {
                 String schema = res.getString(1);
