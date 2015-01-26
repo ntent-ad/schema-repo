@@ -21,7 +21,9 @@ package org.schemarepo;
 import org.schemarepo.config.Config;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -34,9 +36,11 @@ public class ValidatorFactory {
   public static final ValidatorFactory EMPTY = new Builder().build();
 
   private final HashMap<String, Validator> validators;
+  private final Set<String> defaultSubjectValidators;
 
-  private ValidatorFactory(HashMap<String, Validator> validators) {
+  private ValidatorFactory(HashMap<String, Validator> validators, Set<String> defaultSubjectValidators) {
     this.validators = validators;
+    this.defaultSubjectValidators = defaultSubjectValidators;
   }
 
   /**
@@ -55,12 +59,23 @@ public class ValidatorFactory {
     return result;
   }
 
+  public final Set<String> getDefaultSubjectValidators() {
+    HashSet<String> result = new HashSet<String>(defaultSubjectValidators.size());
+    for (String name : defaultSubjectValidators) {
+      if (validators.containsKey(name))
+        result.add(name);
+    }
+    return result;
+  }
+
   public static class Builder {
     private final HashMap<String, Validator> validators;
     {
       validators = new HashMap<String, Validator>();
       validators.put(Config.REJECT_VALIDATOR, new Reject());
     }
+
+    private final Set<String> defaultSubjectValidators = new HashSet<String>();
 
     /**
      * Configure this builder to return a {@link ValidatorFactory} that maps the
@@ -76,8 +91,20 @@ public class ValidatorFactory {
       return this;
     }
 
+    public Builder setDefaultValidator(String name) {
+      defaultSubjectValidators.add(name);
+      return this;
+    }
+
+    public Builder setDefaultValidators(Collection<String> validatorNames) {
+      for (String name : validatorNames) {
+        setDefaultValidator(name);
+      }
+      return this;
+    }
+
     public ValidatorFactory build() {
-      return new ValidatorFactory(new HashMap<String, Validator>(validators));
+      return new ValidatorFactory(new HashMap<String, Validator>(validators), new HashSet<String>(defaultSubjectValidators));
     }
   }
 

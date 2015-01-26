@@ -20,12 +20,10 @@ package org.schemarepo;
 
 import org.schemarepo.config.Config;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -101,7 +99,7 @@ public class SubjectConfig {
     public Builder set(String key, String value) {
       if(key.startsWith(RESERVED_PREFIX)) {
         if(VALIDATORS_KEY.equals(key)) {
-          setValidators(commaSplit(value));
+          setValidators(RepositoryUtil.commaSplit(value));
         } else {
           throw new RuntimeException("SubjectConfig keys starting with '" +
               RESERVED_PREFIX + "' are reserved, failed to set: " + key +
@@ -118,14 +116,15 @@ public class SubjectConfig {
       this.conf.remove(VALIDATORS_KEY);
       if(!validatorNames.isEmpty()) {
         this.validators.addAll(validatorNames);
-        this.conf.put(VALIDATORS_KEY, commaJoin(validators));
       }
+      // put the config entry even if they specified an empty list of validators. This is explicitly "no validators"
+      this.conf.put(VALIDATORS_KEY, RepositoryUtil.commaJoin(validators));
       return this;
     }
 
     public Builder addValidator(String validatorName) {
       this.validators.add(validatorName);
-      this.conf.put(VALIDATORS_KEY, commaJoin(validators));
+      this.conf.put(VALIDATORS_KEY, RepositoryUtil.commaJoin(validators));
       return this;
     }
 
@@ -137,35 +136,5 @@ public class SubjectConfig {
 
   }
 
-  /**
-   * Helper method for splitting a string by a delimiter with
-   * java.util.String.split().
-   * Omits empty values.
-   * @param toSplit The string to split.  If null, an empty
-   *   String[] is returned
-   * @return A String[] containing the non-empty values resulting
-   *   from the split.  Does not return null.
-   */
-  private static List<String> commaSplit(String toSplit) {
-    if (toSplit == null) {
-      return Collections.emptyList();
-    }
-    ArrayList<String> list = new ArrayList<String>();
-    for(String s : toSplit.split(",")) {
-      s = s.trim();
-      if (!s.isEmpty()) {
-        list.add(s);
-      }
-    }
-    return list;
-  }
-
-  private static String commaJoin(Collection<String> strings) {
-    StringBuilder sb = new StringBuilder();
-    for(String s : strings) {
-      sb.append(s).append(',');
-    }
-    return sb.toString();
-  }
 
 }

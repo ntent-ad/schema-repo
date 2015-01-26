@@ -44,6 +44,8 @@ public class Config {
 
   // Validation class related configs
   public static final String VALIDATION_PREFIX = GLOBAL_PREFIX + "validation.";
+  // The default list of validator names (not including prefix) to use for validating subjects.
+  public static final String DEFAULT_SUBJECT_VALIDATORS = VALIDATION_PREFIX + "default.validators";
   // The implementation of the basic "CanRead" validation strategy. The CanBeRead and MutualRead strategies are built from this.
   public static final String VALIDATION_READ_STRATEGY_CLASS = VALIDATION_PREFIX + "can-read.strategy.class";
   // names for strategies for the two included Validators (so a different strategy can be used for each)
@@ -105,6 +107,7 @@ public class Config {
 
     // Validation defaults. The read strategy class is "Always Fail" unless configured.
     DEFAULTS.setProperty(VALIDATION_READ_STRATEGY_CLASS, "org.schemarepo.validation.AlwaysFailValidationStrategy");
+    DEFAULTS.setProperty(DEFAULT_SUBJECT_VALIDATORS,"");
 
     // Logging defaults
     DEFAULTS.setProperty(LOGGING_ROUTE_JUL_TO_SLF4J, "true");
