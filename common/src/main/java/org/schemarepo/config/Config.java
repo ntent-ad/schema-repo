@@ -71,6 +71,10 @@ public class Config {
   private static final String LOCAL_FILE_SYSTEM_PREFIX = GLOBAL_PREFIX + "local-file-system.";
   public static final String LOCAL_FILE_SYSTEM_PATH = LOCAL_FILE_SYSTEM_PREFIX + "path";
 
+  // Jdbc backend configs
+  private static final String JDBC_PREFIX = GLOBAL_PREFIX + "jdbc.";
+  public static final String JDBC_CONNECTION_STRING = JDBC_PREFIX + "connection.string";
+
   // ZooKeeper backend configs
   private static final String ZK_PREFIX = GLOBAL_PREFIX + "zookeeper.";
   public static final String ZK_ENSEMBLE = ZK_PREFIX + "ensemble";
