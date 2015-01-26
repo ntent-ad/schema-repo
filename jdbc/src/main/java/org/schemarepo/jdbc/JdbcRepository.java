@@ -8,6 +8,7 @@ import org.schemarepo.SchemaValidationException;
 import org.schemarepo.Subject;
 import org.schemarepo.SubjectConfig;
 import org.schemarepo.ValidatorFactory;
+import org.schemarepo.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,10 +36,10 @@ public class JdbcRepository extends AbstractBackendRepository {
     private final Logger logger = LoggerFactory.getLogger(getClass());
 
     @Inject
-    public JdbcRepository(@Named("schema-repo.jdbc.jdbc") String jdbc, ValidatorFactory validators) {
+    public JdbcRepository(@Named(Config.JDBC_CONNECTION_STRING) String jdbcConnectionString, ValidatorFactory validators) {
         super(validators);
 
-        this.jdbc = jdbc;
+        this.jdbc = jdbcConnectionString;
 
         // eagerly load up subjects
         loadSubjects();
