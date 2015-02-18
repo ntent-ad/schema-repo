@@ -52,12 +52,10 @@ public class Config {
   public static final String VALIDATION_ALL_VALIDATOR_STRATEGY = VALIDATION_PREFIX + "all-validator.strategy.class";
   public static final String VALIDATION_LATEST_VALIDATOR_STRATEGY = VALIDATION_PREFIX + "latest-validator.strategy.class";
 
-
   // Jetty configs
   private static final String JETTY_PREFIX = GLOBAL_PREFIX + "jetty.";
   public static final String JETTY_HOST = JETTY_PREFIX + "host";
   public static final String JETTY_PORT = JETTY_PREFIX + "port";
-  public static final String JETTY_PATH = JETTY_PREFIX + "path";
   public static final String JETTY_HEADER_SIZE = JETTY_PREFIX + "header.size";
   public static final String JETTY_BUFFER_SIZE = JETTY_PREFIX + "buffer.size";
   public static final String JETTY_STOP_AT_SHUTDOWN = JETTY_PREFIX + "stop-at-shutdown";
@@ -103,11 +101,12 @@ public class Config {
     // Jetty defaults
     DEFAULTS.setProperty(JETTY_HOST, "");
     DEFAULTS.setProperty(JETTY_PORT, "2876"); // 'AVRO' on a t-9 keypad
-    DEFAULTS.setProperty(JETTY_PATH, "/schema-repo");
     DEFAULTS.setProperty(JETTY_HEADER_SIZE, "16384");
     DEFAULTS.setProperty(JETTY_BUFFER_SIZE, "16384");
     DEFAULTS.setProperty(JETTY_STOP_AT_SHUTDOWN, "true");
     DEFAULTS.setProperty(JETTY_GRACEFUL_SHUTDOWN, "3000");
+
+    DEFAULTS.setProperty(DEFAULT_SUBJECT_VALIDATORS,"");
 
     // Validation defaults. The read strategy class is "Always Fail" unless configured.
     DEFAULTS.setProperty(VALIDATION_READ_STRATEGY_CLASS, "org.schemarepo.validation.AlwaysFailValidationStrategy");
