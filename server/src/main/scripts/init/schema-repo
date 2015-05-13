@@ -47,9 +47,7 @@ start() {
     set +e
     pgrep -f "java -jar ${JAR_FILE}" > $PID_FILE
     RETVAL=$?
-    if [ $RETVAL = 0 ] ; then
-        echo ${NAME} is currently running with process ID : `cat $PID_FILE`
-    else
+    if [ $RETVAL != 0 ] ; then
        RETVAL=0
        set +e
        su - $USER -c "java -jar ${JAR_FILE} ${PROPERTIES_FILE} &"
@@ -58,18 +56,19 @@ start() {
 
        case "$RETVAL" in
            0)
-               echo SUCCESS
                if [ -n "$LOCK_FILE" ] ; then
                    touch $LOCK_FILE
                fi
                ;;
            *)
                remove_pid
-               echo FAILED - check ${INIT_LOG_DIR}/schemarepo_startup_\{log, _err\}
                RETVAL=1
                ;;
        esac
     fi
+
+    sleep 5
+    status
 }
 
 stop() {
