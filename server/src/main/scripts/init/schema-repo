@@ -95,6 +95,7 @@ stop() {
 }
 
 status() {
+    RET=3
     set +e
     pgrep -f "java -jar ${JAR_FILE}" > /dev/null
     RETVAL=$?
@@ -103,14 +104,19 @@ status() {
       netstat -an|egrep '2876.*LISTEN' > /dev/null
       if [ $? = 0 ] ; then
          echo port 2876 is open and LISTENing for connections...
+         RET=0
       else
          echo port 2876 is NOT LISTENing
+         RET=4
       fi
     else
       echo ${NAME} server is not running.
+      RET=3
     fi
     RETVAL=0
     set -e
+
+    return $RET
 }
 
 restart() {
