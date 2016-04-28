@@ -25,6 +25,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.ResultSet;
+import java.util.Date;
 import java.util.Properties;
 import java.util.UUID;
 
@@ -265,11 +266,37 @@ public class JdbcRepository extends AbstractBackendRepository {
 
         @Override
         public SchemaEntry lookupBySchema(String schema) {
+            SchemaEntry res = schemas.lookupBySchema(schema);
+            if(res != null)
+                return res;
+
+            try {
+                Connection conn = connect(jdbc);
+                loadSchemas(conn);
+            } catch(ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            } catch(SQLException e) {
+                throw new RuntimeException(e);
+            }
+
             return schemas.lookupBySchema(schema);
         }
 
         @Override
         public SchemaEntry lookupById(String id) {
+            SchemaEntry res = schemas.lookupById(id);
+            if(res != null)
+                return res;
+
+            try {
+                Connection conn = connect(jdbc);
+                loadSchemas(conn);
+            } catch(ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            } catch(SQLException e) {
+                throw new RuntimeException(e);
+            }
+
             return schemas.lookupById(id);
         }
 
