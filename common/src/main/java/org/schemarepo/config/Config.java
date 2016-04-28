@@ -52,6 +52,7 @@ public class Config {
   public static final String VALIDATION_ALL_VALIDATOR_STRATEGY = VALIDATION_PREFIX + "all-validator.strategy.class";
   public static final String VALIDATION_LATEST_VALIDATOR_STRATEGY = VALIDATION_PREFIX + "latest-validator.strategy.class";
 
+
   // Jetty configs
   private static final String JETTY_PREFIX = GLOBAL_PREFIX + "jetty.";
   public static final String JETTY_HOST = JETTY_PREFIX + "host";
