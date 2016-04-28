@@ -66,7 +66,7 @@ public class JdbcRepository extends AbstractBackendRepository {
 
                 // topic does not exist in db, create it
                 PreparedStatement ste = conn.prepareStatement(
-                        "insert into dbo.Topic(Topic,Configuration) values(?,?);");
+                        "insert into Topic(Topic,Configuration) values(?,?);");
                 ste.setString(1, subjectName);
                 ste.setString(2, configAsString(config));
                 ste.execute();
@@ -115,7 +115,7 @@ public class JdbcRepository extends AbstractBackendRepository {
             Connection conn = connect(jdbc);
             try {
                 PreparedStatement ste = conn.prepareStatement(
-                        "select Topic, Id, Configuration from dbo.Topic");
+                        "select Topic, Id, Configuration from Topic");
                 ResultSet res = ste.executeQuery();
                 while (res.next()) {
                     String subjectName = res.getString(1);
@@ -138,9 +138,7 @@ public class JdbcRepository extends AbstractBackendRepository {
 
     private int checkExists(String subjectName, Connection conn) throws SQLException {
         // topic is not cached
-        PreparedStatement ste = conn.prepareStatement(
-                "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n"+
-                        "select Id from dbo.Topic where Topic=?");
+        PreparedStatement ste = conn.prepareStatement("select Id from Topic where Topic=? FOR UPDATE;");
         ste.setString(1, subjectName);
         ResultSet res = ste.executeQuery();
         if(res.next()) {
@@ -228,7 +226,7 @@ public class JdbcRepository extends AbstractBackendRepository {
 
         private void loadConfig(Connection conn) throws SQLException, IOException {
             PreparedStatement ste = conn.prepareStatement(
-                    "select Configuration from dbo.Topic where Id=?");
+                    "select Configuration from Topic where Id=?");
             ste.setInt(1, subjectId);
             ResultSet res = ste.executeQuery();
             if (!res.next()) {
@@ -299,8 +297,7 @@ public class JdbcRepository extends AbstractBackendRepository {
                     // check if schema exists
                     String hash = makeHash(schema);
                     PreparedStatement ste = conn.prepareStatement(
-                            "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n" +
-                                    "select Id, Hash from dbo.[Schema] where Hash=?");
+                                    "select Id, Hash from `Schema` where Hash=? FOR UPDATE");
                     ste.setString(1, hash);
                     ResultSet res = ste.executeQuery();
                     if (res.next()) {
@@ -311,8 +308,8 @@ public class JdbcRepository extends AbstractBackendRepository {
                     } else {
                         // schema does not exist in db, create it
                         PreparedStatement ste2 = conn.prepareStatement(
-                                "insert into dbo.[Schema]([Schema], Hash) values(?,?);\n" +
-                                        "select Id from dbo.[Schema] where Hash=?");
+                                "insert into `Schema`(`Schema`, Hash) values(?,?);\n" +
+                                        "select Id from `Schema` where Hash=?");
                         ste2.setString(1, schema);
                         ste2.setString(2, hash);
                         ste2.setString(3, hash);
@@ -325,9 +322,7 @@ public class JdbcRepository extends AbstractBackendRepository {
                     // Register this schema to this topic
                     //
                     ste = conn.prepareStatement(
-                            "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;\n" +
-                                    "if not exists(select * from dbo.TopicSchemaMap where TopicId=? and SchemaId=?)\n" +
-                                    "insert into dbo.TopicSchemaMap(TopicId, SchemaId) values(?, ?)");
+                                    "insert ignore into TopicSchemaMap(TopicId, SchemaId) values(?, ?)");
                     ste.setInt(1, subjectId);
                     ste.setInt(2, schemaId);
                     ste.setInt(3, subjectId);
@@ -354,9 +349,9 @@ public class JdbcRepository extends AbstractBackendRepository {
         private void loadSchemas(Connection conn) throws SQLException {
 
             // load schemas into subjects
-            PreparedStatement ste = conn.prepareStatement("select s.[Schema], s.Id\n" +
-                    "from dbo.TopicSchemaMap m\n" +
-                    "join dbo.[Schema] s on s.Id=m.SchemaId\n" +
+            PreparedStatement ste = conn.prepareStatement("select s.`Schema`, s.Id\n" +
+                    "from TopicSchemaMap m\n" +
+                    "join `Schema` s on s.Id=m.SchemaId\n" +
                     "where m.TopicId=?\n" +
                     "order by s.Id");
             ste.setInt(1, subjectId);
