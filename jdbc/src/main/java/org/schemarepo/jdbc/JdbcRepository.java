@@ -107,7 +107,6 @@ public class JdbcRepository extends AbstractBackendRepository {
     }
 
     private static Connection connect(String jdbc) throws ClassNotFoundException, SQLException {
-        Class.forName("net.sourceforge.jtds.jdbc.Driver");
         return DriverManager.getConnection(jdbc);
     }
 
