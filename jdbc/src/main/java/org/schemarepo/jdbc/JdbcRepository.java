@@ -339,7 +339,7 @@ public class JdbcRepository extends AbstractBackendRepository {
                         ste2.executeUpdate();
 
                         PreparedStatement ste3 = conn.prepareStatement("select Id from `Schema` where Hash=?");
-                        ste2.setString(1, hash);
+                        ste3.setString(1, hash);
                         ResultSet res3 = ste.executeQuery();
                         res3.next();
                         schemaId = res3.getInt(1);
