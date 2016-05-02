@@ -333,15 +333,16 @@ public class JdbcRepository extends AbstractBackendRepository {
                             throw new RuntimeException("Corrupt schema: hash does not match to the one already exists");
                     } else {
                         // schema does not exist in db, create it
-                        PreparedStatement ste2 = conn.prepareStatement(
-                                "insert into `Schema`(`Schema`, Hash) values(?,?);\n" +
-                                        "select Id from `Schema` where Hash=?");
+                        PreparedStatement ste2 = conn.prepareStatement("insert into `Schema`(`Schema`, Hash) values(?,?);");
                         ste2.setString(1, schema);
                         ste2.setString(2, hash);
-                        ste2.setString(3, hash);
-                        ResultSet res2 = ste2.executeQuery();
-                        res2.next();
-                        schemaId = res2.getInt(1);
+                        ste2.executeUpdate();
+
+                        PreparedStatement ste3 = conn.prepareStatement("select Id from `Schema` where Hash=?");
+                        ste2.setString(1, hash);
+                        ResultSet res3 = ste.executeQuery();
+                        res3.next();
+                        schemaId = res3.getInt(1);
                     }
 
                     //
@@ -351,9 +352,7 @@ public class JdbcRepository extends AbstractBackendRepository {
                                     "insert ignore into TopicSchemaMap(TopicId, SchemaId) values(?, ?)");
                     ste.setInt(1, subjectId);
                     ste.setInt(2, schemaId);
-                    ste.setInt(3, subjectId);
-                    ste.setInt(4, schemaId);
-                    ste.execute();
+                    ste.executeUpdate();
                 } finally {
                     if (conn != null)
                         conn.close();
