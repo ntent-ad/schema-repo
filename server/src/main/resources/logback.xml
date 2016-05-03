@@ -24,7 +24,6 @@
     <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
       <fileNamePattern>${schema-repo.logging.filename}.%d{yyyy-MM-dd}.log</fileNamePattern>
       <maxHistory>30</maxHistory>
-      <cleanHistoryOnStart>true</cleanHistoryOnStart>
     </rollingPolicy>
     <encoder>
       <pattern>%d{HH:mm:ss.SSS} %-5level [%-40logger{40}] %message [%thread] %n</pattern>
