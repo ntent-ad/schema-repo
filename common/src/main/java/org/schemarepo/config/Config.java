@@ -74,6 +74,10 @@ public class Config {
   private static final String JDBC_PREFIX = GLOBAL_PREFIX + "jdbc.";
   public static final String JDBC_CONNECTION_STRING = JDBC_PREFIX + "connection.string";
 
+  //Confluent backend configs
+  private static final String CONFLUENT_PREFIX = GLOBAL_PREFIX + "confluent.";
+  public static final String CONFLUENT_CONNECTION_STRING = CONFLUENT_PREFIX + "connection.string";
+
   // ZooKeeper backend configs
   private static final String ZK_PREFIX = GLOBAL_PREFIX + "zookeeper.";
   public static final String ZK_ENSEMBLE = ZK_PREFIX + "ensemble";

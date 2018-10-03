@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: schema-registry-proxy
+  labels:
+    release: schema-registry-proxy
+    version: "0.3"
+spec:
+  replicas: 1
+  revisionHistoryLimit: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 50%
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: schema-registry-proxy
+  template:
+    metadata:
+      name: schema-registry-proxy
+      annotations:
+        kubernetes.io/change-cause: 'Version 0.3'
+      labels:
+        app: schema-registry-proxy
+        version: "0.3"
+    spec:
+      volumes:
+        - name: timezone-config
+          hostPath:
+            path: /etc/localtime
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: schema-registry-proxy
+        image: ntent/schema-registry-proxy:0.3
+        ports:
+        - containerPort: 2876
+          protocol: TCP
+        readinessProbe:
+          initialDelaySeconds: 30
+          successThreshold: 3
+          httpGet:
+            path: /schema-repo
+            port: 2876
+        resources:
+          requests:
+            memory: "3Gi"
+            cpu: "0.5"
+          limits:
+            memory: "5Gi"
+            cpu: "2"
+        env:
+        - name: CONFLUENT_REGISTRY_URL
+          value: "http://confluent-schema-registry.dev:8081"
+        envFrom:
+        - configMapRef:
+            name: env-config
+        volumeMounts:
+        - name: timezone-config
+          mountPath: /etc/localtime
+          readOnly: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: schema-registry-proxy-service
+  labels:
+    release: schema-registry-proxy
+spec:
+  type: ClusterIP
+  ports:
+  - port: 2876 # the port that this service should serve on
+    # the container on each pod to connect to
+    targetPort: 2876
+    protocol: TCP
+    name: api-port
+  # just like the selector in the deployment,
+  # but this time it identifies the set of pods to load balance
+  # traffic to.
+  selector:
+    app: schema-registry-proxy
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: schema-registry-proxy-vip
+  labels:
+    release: schema-registry-proxy
+    f5type: virtual-server
+data:
+  schema: f5schemadb://bigip-virtual-server_v0.1.7.json
+  data: |
+    {
+      "virtualServer": {
+        "frontend": {
+          "balance": "round-robin",
+          "mode": "http",
+          "partition": "dev-k8s",
+          "virtualAddress": {
+            "bindAddr": "10.0.127.132",
+            "port": 80
+          }
+        },
+        "backend": {
+          "serviceName": "schema-registry-proxy-service",
+          "servicePort": 2876
+        }
+      }
+    }

@@ -76,13 +76,15 @@
     <module>common</module>
     <module>api</module>
     <module>avro</module>
-    <module>jdbc</module>
+    <!--<module>jdbc</module>-->
     <module>server</module>
     <module>client</module>
     <module>bundle</module>
-    <module>zookeeper</module>
-    <module>zk-bundle</module>
-    <module>jdbc-bundle</module>
+    <!--<module>zookeeper</module>-->
+    <!--<module>zk-bundle</module>-->
+    <!--<module>jdbc-bundle</module>-->
+    <module>confluent-proxy</module>
+    <module>confluent-proxy-bundle</module>
   </modules>
 
   <properties>
